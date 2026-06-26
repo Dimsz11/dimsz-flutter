@@ -1,46 +1,38 @@
 # ============================================================
-# FILE: .github/workflows/build-apk.yml (LENGKAP - SUPPORT zip_url)
+# FILE: .github/workflows/build-apk.yml
 # ============================================================
 
-name: Build APK from ZIP
+name: Build APK
 
 on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: 'URL ZIP file (Direct download link)'
+        description: 'URL file ZIP project Flutter'
         required: true
         type: string
-        default: ''
-      branch:
-        description: 'Branch to build'
-        required: false
-        default: 'main'
+      tag:
+        description: 'Tag/Nama file APK'
+        required: true
         type: string
+        default: 'app'
       build_type:
-        description: 'Build type (release/debug/profile)'
-        required: false
-        default: 'release'
+        description: 'Type Build'
+        required: true
         type: choice
         options:
           - release
           - debug
           - profile
-      tag:
-        description: 'Tag name for APK'
-        required: false
-        default: 'app'
-        type: string
+        default: 'release'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.inputs.branch }}
 
     - name: Setup Java
       uses: actions/setup-java@v4
@@ -54,20 +46,19 @@ jobs:
         flutter-version: '3.22.0'
         channel: 'stable'
 
-    - name: Download and extract ZIP
+    - name: Download ZIP
       run: |
-        echo "📥 Downloading ZIP from: ${{ github.event.inputs.zip_url }}"
+        echo "📥 Download from: ${{ github.event.inputs.zip_url }}"
         curl -L -o project.zip "${{ github.event.inputs.zip_url }}"
         unzip -o project.zip -d project/
         ls -la project/
 
-    - name: Move project files
+    - name: Move to root
       run: |
-        # Pindahkan semua file ke root
         if [ -d "project" ]; then
           shopt -s dotglob
-          mv project/* ./ || true
-          mv project/.* ./ || true
+          mv project/* ./ 2>/dev/null || true
+          mv project/.* ./ 2>/dev/null || true
           rm -rf project
         fi
         ls -la
@@ -75,22 +66,18 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Clean build
+    - name: Clean
       run: flutter clean
 
-    - name: Build APK (${{ github.event.inputs.build_type }})
+    - name: Build APK
       run: flutter build apk --${{ github.event.inputs.build_type }}
 
     - name: Rename APK
       run: |
-        # Cari file APK
         APK_PATH=$(find build/app/outputs/flutter-apk -name "*.apk" | head -n 1)
         if [ -f "$APK_PATH" ]; then
           mv "$APK_PATH" "build/app/outputs/flutter-apk/${{ github.event.inputs.tag }}.apk"
           echo "✅ APK renamed to ${{ github.event.inputs.tag }}.apk"
-        else
-          echo "❌ APK not found!"
-          exit 1
         fi
 
     - name: Upload APK
