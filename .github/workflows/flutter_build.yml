@@ -1,11 +1,26 @@
 name: Flutter Build APK (Universal)
 
 on:
+  workflow_dispatch:
+    inputs:
+      zip_url:
+        description: 'URL ZIP file (opsional)'
+        required: false
+        type: string
+      tag:
+        description: 'Tag release (opsional)'
+        required: false
+        type: string
+      build_type:
+        description: 'Tipe build (release/debug)'
+        required: false
+        type: choice
+        options:
+          - release
+          - debug
+        default: 'release'
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -13,45 +28,50 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    # ===== 1. CHECKOUT REPO =====
     - name: 📦 Checkout Repository
       uses: actions/checkout@v4
 
-    # ===== 2. SETUP JAVA =====
     - name: ☕ Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    # ===== 3. SETUP FLUTTER (UNIVERSAL) =====
     - name: 🐦 Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.22.4'  # Bisa diubah sesuai kebutuhan
+        flutter-version: '3.22.4'
         channel: 'stable'
 
-    # ===== 4. FIX PUBSPEC (AUTO) =====
     - name: 🔧 Fix pubspec.yaml (Universal SDK)
       run: |
         if [ -f pubspec.yaml ]; then
           sed -i 's/sdk: .*/sdk: ">=2.19.0 <4.0.0"/g' pubspec.yaml
-          echo "✅ pubspec.yaml fixed to universal SDK"
+          echo "✅ pubspec.yaml fixed"
         fi
 
-    # ===== 5. FLUTTER CLEAN =====
+    # ===== KALO ADA ZIP_URL, DOWNLOAD & EKSTRAK =====
+    - name: 📥 Download ZIP from URL
+      if: github.event.inputs.zip_url != ''
+      run: |
+        curl -L "${{ github.event.inputs.zip_url }}" -o project.zip
+        unzip -o project.zip -d .
+        echo "✅ ZIP downloaded and extracted"
+
     - name: 🧹 Flutter Clean
       run: flutter clean
 
-    # ===== 6. FLUTTER PUB GET =====
     - name: 📦 Flutter Pub Get
       run: flutter pub get
 
-    # ===== 7. BUILD APK =====
     - name: 🏗️ Build APK
-      run: flutter build apk --release --split-per-abi
+      run: |
+        if [ "${{ github.event.inputs.build_type }}" == "debug" ]; then
+          flutter build apk --debug
+        else
+          flutter build apk --release --split-per-abi
+        fi
 
-    # ===== 8. UPLOAD APK =====
     - name: 📤 Upload APK Artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -60,16 +80,15 @@ jobs:
           build/app/outputs/flutter-apk/*.apk
         retention-days: 7
 
-    # ===== 9. UPLOAD RELEASE (OPTIONAL) =====
     - name: 🚀 Upload to Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event.inputs.tag != ''
       uses: softprops/action-gh-release@v1
       with:
         files: |
           build/app/outputs/flutter-apk/*.apk
-        tag_name: v1.0.${{ github.run_number }}
-        name: Release v1.0.${{ github.run_number }}
-        body: "🚀 Auto build dari GitHub Actions (Universal SDK)"
+        tag_name: ${{ github.event.inputs.tag }}
+        name: Release ${{ github.event.inputs.tag }}
+        body: "🚀 Auto build dari GitHub Actions"
         draft: false
         prerelease: false
       env:
