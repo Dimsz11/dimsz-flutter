@@ -1,7 +1,24 @@
-name: Flutter Build APK
+name: Flutter Build APK (With Inputs)
 
 on:
   workflow_dispatch:
+    inputs:
+      zip_url:
+        description: 'URL ZIP file (opsional)'
+        required: false
+        type: string
+      tag:
+        description: 'Tag release (opsional)'
+        required: false
+        type: string
+      build_type:
+        description: 'Tipe build'
+        required: false
+        type: choice
+        options:
+          - release
+          - debug
+        default: 'release'
 
 jobs:
   build:
@@ -52,7 +69,11 @@ jobs:
     - name: 🏗️ Build APK
       run: |
         export PATH="/opt/flutter/bin:$PATH"
-        flutter build apk --release --split-per-abi
+        if [ "${{ github.event.inputs.build_type }}" == "debug" ]; then
+          flutter build apk --debug
+        else
+          flutter build apk --release --split-per-abi
+        fi
 
     - name: 📤 Upload APK
       uses: actions/upload-artifact@v4
@@ -61,3 +82,17 @@ jobs:
         path: |
           build/app/outputs/flutter-apk/*.apk
         retention-days: 7
+
+    - name: 🚀 Upload to Release
+      if: github.event.inputs.tag != ''
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/app/outputs/flutter-apk/*.apk
+        tag_name: ${{ github.event.inputs.tag }}
+        name: Release ${{ github.event.inputs.tag }}
+        body: "🚀 Auto build dari GitHub Actions"
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
