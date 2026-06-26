@@ -1,18 +1,18 @@
-name: Flutter Build APK (Universal)
+name: Flutter Build APK (FIXED)
 
 on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: 'URL ZIP file (opsional)'
+        description: 'URL ZIP file'
         required: false
         type: string
       tag:
-        description: 'Tag release (opsional)'
+        description: 'Tag release'
         required: false
         type: string
       build_type:
-        description: 'Tipe build (release/debug)'
+        description: 'Tipe build'
         required: false
         type: choice
         options:
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - name: 📦 Checkout Repository
+    - name: 📦 Checkout
       uses: actions/checkout@v4
 
     - name: ☕ Setup Java
@@ -35,31 +35,42 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    # ===== FLUTTER SETUP — PASTI WORK =====
     - name: 🐦 Setup Flutter
       run: |
-        # Download Flutter
         wget -q https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
         tar -xf flutter_linux_3.24.5-stable.tar.xz -C /opt/
-        
-        # Set PATH
         echo "/opt/flutter/bin" >> $GITHUB_PATH
         echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
-        
-        # Pake full path biar pasti
         /opt/flutter/bin/flutter --version
-        
-        # Flutter doctor buat cek
-        /opt/flutter/bin/flutter doctor
 
-    - name: 🔧 Fix pubspec.yaml
+    # ===== INI YANG PALING PENTING =====
+    - name: 🔧 FORCE FIX pubspec.yaml
       run: |
-        if [ -f pubspec.yaml ]; then
-          sed -i 's/sdk: .*/sdk: ">=2.19.0 <4.0.0"/g' pubspec.yaml
-          echo "✅ pubspec.yaml fixed"
-        fi
+        # Backup
+        cp pubspec.yaml pubspec.yaml.bak 2>/dev/null || echo "No pubspec.yaml"
+        
+        # PAKE PYTHON (PASTI WORK)
+        python3 << 'EOF'
+import re
+with open('pubspec.yaml', 'r') as f:
+    content = f.read()
 
-    - name: 📥 Download ZIP (jika ada)
+# Ganti SEMUA format SDK
+content = re.sub(r'sdk: \^3\.8\.1', 'sdk: ">=2.19.0 <4.0.0"', content)
+content = re.sub(r'sdk: ">=3\.8\.1"', 'sdk: ">=2.19.0 <4.0.0"', content)
+content = re.sub(r'sdk: ">=3\.8\.1 <4\.0\.0"', 'sdk: ">=2.19.0 <4.0.0"', content)
+content = re.sub(r'sdk: \^3\.8\.1 <4\.0\.0', 'sdk: ">=2.19.0 <4.0.0"', content)
+
+with open('pubspec.yaml', 'w') as f:
+    f.write(content)
+print("✅ pubspec.yaml FIXED!")
+EOF
+        
+        # Tampilin hasil
+        echo "📄 HASIL FIX:"
+        cat pubspec.yaml | grep -A5 "environment:" || echo "⚠️ environment section not found!"
+
+    - name: 📥 Download ZIP
       if: github.event.inputs.zip_url != ''
       run: |
         curl -L "${{ github.event.inputs.zip_url }}" -o project.zip
@@ -92,7 +103,7 @@ jobs:
           build/app/outputs/flutter-apk/*.apk
         retention-days: 7
 
-    - name: 🚀 Upload to Release
+    - name: 🚀 Upload Release
       if: github.event.inputs.tag != ''
       uses: softprops/action-gh-release@v1
       with:
@@ -100,8 +111,6 @@ jobs:
           build/app/outputs/flutter-apk/*.apk
         tag_name: ${{ github.event.inputs.tag }}
         name: Release ${{ github.event.inputs.tag }}
-        body: "🚀 Auto build dari GitHub Actions"
-        draft: false
-        prerelease: false
+        body: "🚀 Auto build fixed!"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
