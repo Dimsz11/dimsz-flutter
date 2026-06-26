@@ -1,24 +1,36 @@
 # ============================================================
-# FILE: .github/workflows/build-apk.yml (DENGAN INPUT LENGKAP)
+# FILE: .github/workflows/build-apk.yml (LENGKAP - SUPPORT zip_url)
 # ============================================================
 
-name: Build APK
+name: Build APK from ZIP
 
 on:
   workflow_dispatch:
     inputs:
+      zip_url:
+        description: 'URL ZIP file (Direct download link)'
+        required: true
+        type: string
+        default: ''
       branch:
         description: 'Branch to build'
         required: false
         default: 'main'
+        type: string
       build_type:
-        description: 'Build type (release/debug)'
+        description: 'Build type (release/debug/profile)'
         required: false
         default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+          - profile
       tag:
-        description: 'Tag version'
+        description: 'Tag name for APK'
         required: false
-        default: 'v1.0.0'
+        default: 'app'
+        type: string
 
 jobs:
   build:
@@ -42,6 +54,24 @@ jobs:
         flutter-version: '3.22.0'
         channel: 'stable'
 
+    - name: Download and extract ZIP
+      run: |
+        echo "📥 Downloading ZIP from: ${{ github.event.inputs.zip_url }}"
+        curl -L -o project.zip "${{ github.event.inputs.zip_url }}"
+        unzip -o project.zip -d project/
+        ls -la project/
+
+    - name: Move project files
+      run: |
+        # Pindahkan semua file ke root
+        if [ -d "project" ]; then
+          shopt -s dotglob
+          mv project/* ./ || true
+          mv project/.* ./ || true
+          rm -rf project
+        fi
+        ls -la
+
     - name: Install dependencies
       run: flutter pub get
 
@@ -53,7 +83,15 @@ jobs:
 
     - name: Rename APK
       run: |
-        mv build/app/outputs/flutter-apk/app-${{ github.event.inputs.build_type }}.apk build/app/outputs/flutter-apk/${{ github.event.inputs.tag }}.apk || true
+        # Cari file APK
+        APK_PATH=$(find build/app/outputs/flutter-apk -name "*.apk" | head -n 1)
+        if [ -f "$APK_PATH" ]; then
+          mv "$APK_PATH" "build/app/outputs/flutter-apk/${{ github.event.inputs.tag }}.apk"
+          echo "✅ APK renamed to ${{ github.event.inputs.tag }}.apk"
+        else
+          echo "❌ APK not found!"
+          exit 1
+        fi
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
