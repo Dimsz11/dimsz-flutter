@@ -1,4 +1,4 @@
-name: Flutter Build APK (FIXED)
+name: Flutter Build APK (REAL FIX)
 
 on:
   workflow_dispatch:
@@ -45,26 +45,45 @@ jobs:
         curl -L "${{ github.event.inputs.zip_url }}" -o project.zip
         unzip -o project.zip -d .
     
-    - name: 🔧 FIX PUBSPEC & GEOLOCATOR
+    - name: 🔧 FIX PUBSPEC (FORMAT BENER)
       run: |
-        # 1. Fix pubspec SDK
-        find . -name "pubspec.yaml" -type f -exec sed -i 's/sdk: .*/sdk: ">=2.19.0 <4.0.0"/g' {} \;
+        echo "🔍 Mencari pubspec.yaml..."
+        find . -name "pubspec.yaml" -type f -print
         
-        # 2. FIX GEOLOCATOR_ANDROID (PASTI KENA)
-        GRADLE_FILE=$(find . -path "*/geolocator_android-*/android/build.gradle" 2>/dev/null | head -1)
-        if [ -f "$GRADLE_FILE" ]; then
-          echo "📄 Fixing geolocator_android: $GRADLE_FILE"
-          sed -i '/android {/a \    compileSdk 34' "$GRADLE_FILE"
-          echo "✅ Fixed!"
-        fi
+        echo ""
+        echo "🔧 Memperbaiki format..."
+        python3 << 'EOF'
+import os
+import re
+
+for root, dirs, files in os.walk('.'):
+    for file in files:
+        if file == 'pubspec.yaml':
+            path = os.path.join(root, file)
+            print(f"📄 Fixing: {path}")
+            
+            with open(path, 'r') as f:
+                content = f.read()
+            
+            # 1. Fix environment.sdk
+            content = re.sub(r'sdk: .*', 'sdk: ">=2.19.0 <4.0.0"', content, flags=re.MULTILINE)
+            
+            # 2. Fix flutter_test (HARUS sdk: flutter)
+            content = re.sub(
+                r'flutter_test:\s*\n\s*sdk:.*',
+                'flutter_test:\n    sdk: flutter',
+                content
+            )
+            
+            with open(path, 'w') as f:
+                f.write(content)
+            
+            print(f"✅ Fixed: {path}")
+EOF
         
-        # 3. Fix semua plugin yang ga punya compileSdk
-        find . -name "build.gradle" -path "*/android/*" -type f | while read file; do
-          if ! grep -q "compileSdk" "$file"; then
-            echo "📄 Adding compileSdk to: $file"
-            sed -i '/android {/a \    compileSdk 34' "$file"
-          fi
-        done
+        echo ""
+        echo "✅ Hasil fix:"
+        find . -name "pubspec.yaml" -type f -exec cat {} \;
     
     - name: Build APK
       run: |
@@ -79,15 +98,3 @@ jobs:
         name: apk-builds
         path: build/app/outputs/flutter-apk/*.apk
         retention-days: 7
-    
-    - name: Upload to Release
-      if: github.event.inputs.tag != ''
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          build/app/outputs/flutter-apk/*.apk
-        tag_name: ${{ github.event.inputs.tag }}
-        name: Release ${{ github.event.inputs.tag }}
-        body: "🚀 Auto build fixed!"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
