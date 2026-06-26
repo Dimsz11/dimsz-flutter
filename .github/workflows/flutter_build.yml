@@ -1,96 +1,76 @@
-name: Flutter Build APK
+name: Flutter Build APK (Universal)
 
 on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      zip_url:
-        description: 'URL zip project Flutter'
-        required: true
-        type: string
-      tag:
-        description: 'Release tag'
-        required: true
-        type: string
-      build_type:
-        description: 'Build type (release/debug)'
-        required: false
-        default: 'release'
-        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    # ===== 1. CHECKOUT REPO =====
+    - name: 📦 Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+    # ===== 2. SETUP JAVA =====
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.0'
-          channel: 'stable'
-          cache: true
+    # ===== 3. SETUP FLUTTER (UNIVERSAL) =====
+    - name: 🐦 Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.22.4'  # Bisa diubah sesuai kebutuhan
+        channel: 'stable'
 
-      - name: Download project
-        run: |
-          echo "📥 Downloading project from ${{ inputs.zip_url }}"
-          curl -L -o project.zip "${{ inputs.zip_url }}"
-          unzip -q project.zip -d project
-          ls -la project/
+    # ===== 4. FIX PUBSPEC (AUTO) =====
+    - name: 🔧 Fix pubspec.yaml (Universal SDK)
+      run: |
+        if [ -f pubspec.yaml ]; then
+          sed -i 's/sdk: .*/sdk: ">=2.19.0 <4.0.0"/g' pubspec.yaml
+          echo "✅ pubspec.yaml fixed to universal SDK"
+        fi
 
-      - name: Find Flutter project root
-        id: find_root
-        run: |
-          cd project
-          # Cari pubspec.yaml di root atau di dalam folder
-          if [ -f "pubspec.yaml" ]; then
-            echo "root=." >> $GITHUB_OUTPUT
-          elif [ -f "*/pubspec.yaml" ]; then
-            ROOT=$(find . -maxdepth 2 -name "pubspec.yaml" | head -1 | xargs dirname)
-            echo "root=$ROOT" >> $GITHUB_OUTPUT
-          else
-            echo "❌ pubspec.yaml not found!"
-            exit 1
-          fi
+    # ===== 5. FLUTTER CLEAN =====
+    - name: 🧹 Flutter Clean
+      run: flutter clean
 
-      - name: Flutter clean & pub get
-        run: |
-          cd project/${{ steps.find_root.outputs.root }}
-          flutter clean
-          flutter pub get
+    # ===== 6. FLUTTER PUB GET =====
+    - name: 📦 Flutter Pub Get
+      run: flutter pub get
 
-      - name: Build APK
-        run: |
-          cd project/${{ steps.find_root.outputs.root }}
-          if [ "${{ inputs.build_type }}" == "debug" ]; then
-            flutter build apk --debug
-          else
-            flutter build apk --release
-          fi
+    # ===== 7. BUILD APK =====
+    - name: 🏗️ Build APK
+      run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: project/${{ steps.find_root.outputs.root }}/build/app/outputs/flutter-apk/*.apk
-          retention-days: 7
+    # ===== 8. UPLOAD APK =====
+    - name: 📤 Upload APK Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: apk-builds
+        path: |
+          build/app/outputs/flutter-apk/*.apk
+        retention-days: 7
 
-      - name: Upload to release (optional)
-        if: success()
-        run: |
-          cd project/${{ steps.find_root.outputs.root }}
-          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
-          if [ -f "$APK_PATH" ]; then
-            echo "✅ APK found: $APK_PATH"
-            ls -la "$APK_PATH"
-          else
-            echo "❌ APK not found!"
-            exit 1
-          fi
+    # ===== 9. UPLOAD RELEASE (OPTIONAL) =====
+    - name: 🚀 Upload to Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/app/outputs/flutter-apk/*.apk
+        tag_name: v1.0.${{ github.run_number }}
+        name: Release v1.0.${{ github.run_number }}
+        body: "🚀 Auto build dari GitHub Actions (Universal SDK)"
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
