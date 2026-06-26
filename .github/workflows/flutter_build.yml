@@ -1,5 +1,5 @@
 # ============================================================
-# FILE: .github/workflows/build-apk.yml
+# FILE: .github/workflows/build-apk.yml (DENGAN INPUT LENGKAP)
 # ============================================================
 
 name: Build APK
@@ -11,6 +11,14 @@ on:
         description: 'Branch to build'
         required: false
         default: 'main'
+      build_type:
+        description: 'Build type (release/debug)'
+        required: false
+        default: 'release'
+      tag:
+        description: 'Tag version'
+        required: false
+        default: 'v1.0.0'
 
 jobs:
   build:
@@ -19,6 +27,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
 
     - name: Setup Java
       uses: actions/setup-java@v4
@@ -38,11 +48,15 @@ jobs:
     - name: Clean build
       run: flutter clean
 
-    - name: Build APK
-      run: flutter build apk --release
+    - name: Build APK (${{ github.event.inputs.build_type }})
+      run: flutter build apk --${{ github.event.inputs.build_type }}
+
+    - name: Rename APK
+      run: |
+        mv build/app/outputs/flutter-apk/app-${{ github.event.inputs.build_type }}.apk build/app/outputs/flutter-apk/${{ github.event.inputs.tag }}.apk || true
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-release
-        path: build/app/outputs/flutter-apk/app-release.apk
+        name: ${{ github.event.inputs.tag }}
+        path: build/app/outputs/flutter-apk/*.apk
