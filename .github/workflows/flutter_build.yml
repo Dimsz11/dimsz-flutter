@@ -1,18 +1,18 @@
-name: Flutter Build APK (FIXED)
+name: Flutter Build APK (Fixed)
 
 on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: 'URL ZIP file'
+        description: 'URL ZIP file (opsional)'
         required: false
         type: string
       tag:
-        description: 'Tag release'
+        description: 'Tag release (opsional)'
         required: false
         type: string
       build_type:
-        description: 'Tipe build'
+        description: 'Tipe build (release/debug)'
         required: false
         type: choice
         options:
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - name: 📦 Checkout
+    - name: 📦 Checkout Repository
       uses: actions/checkout@v4
 
     - name: ☕ Setup Java
@@ -43,34 +43,24 @@ jobs:
         echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
         /opt/flutter/bin/flutter --version
 
-    # ===== INI YANG PALING PENTING =====
     - name: 🔧 FORCE FIX pubspec.yaml
       run: |
-        # Backup
         cp pubspec.yaml pubspec.yaml.bak 2>/dev/null || echo "No pubspec.yaml"
-        
-        # PAKE PYTHON (PASTI WORK)
         python3 << 'EOF'
 import re
 with open('pubspec.yaml', 'r') as f:
     content = f.read()
-
-# Ganti SEMUA format SDK
 content = re.sub(r'sdk: \^3\.8\.1', 'sdk: ">=2.19.0 <4.0.0"', content)
 content = re.sub(r'sdk: ">=3\.8\.1"', 'sdk: ">=2.19.0 <4.0.0"', content)
 content = re.sub(r'sdk: ">=3\.8\.1 <4\.0\.0"', 'sdk: ">=2.19.0 <4.0.0"', content)
 content = re.sub(r'sdk: \^3\.8\.1 <4\.0\.0', 'sdk: ">=2.19.0 <4.0.0"', content)
-
 with open('pubspec.yaml', 'w') as f:
     f.write(content)
 print("✅ pubspec.yaml FIXED!")
 EOF
-        
-        # Tampilin hasil
-        echo "📄 HASIL FIX:"
         cat pubspec.yaml | grep -A5 "environment:" || echo "⚠️ environment section not found!"
 
-    - name: 📥 Download ZIP
+    - name: 📥 Download ZIP (jika ada)
       if: github.event.inputs.zip_url != ''
       run: |
         curl -L "${{ github.event.inputs.zip_url }}" -o project.zip
@@ -103,7 +93,7 @@ EOF
           build/app/outputs/flutter-apk/*.apk
         retention-days: 7
 
-    - name: 🚀 Upload Release
+    - name: 🚀 Upload to Release
       if: github.event.inputs.tag != ''
       uses: softprops/action-gh-release@v1
       with:
@@ -111,6 +101,8 @@ EOF
           build/app/outputs/flutter-apk/*.apk
         tag_name: ${{ github.event.inputs.tag }}
         name: Release ${{ github.event.inputs.tag }}
-        body: "🚀 Auto build fixed!"
+        body: "🚀 Auto build dari GitHub Actions"
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
