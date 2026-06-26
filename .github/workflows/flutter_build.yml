@@ -35,17 +35,22 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    # ===== PAKE CARA MANUAL (PASTI WORK) =====
-    - name: 🐦 Setup Flutter (Manual)
+    # ===== FLUTTER SETUP — PASTI WORK =====
+    - name: 🐦 Setup Flutter
       run: |
-        # Download Flutter SDK versi stable terbaru
-        wget https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
-        tar -xf flutter_linux_3.24.5-stable.tar.xz
-        echo "$PWD/flutter/bin" >> $GITHUB_PATH
-        echo "FLUTTER_ROOT=$PWD/flutter" >> $GITHUB_ENV
+        # Download Flutter
+        wget -q https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
+        tar -xf flutter_linux_3.24.5-stable.tar.xz -C /opt/
         
-        # Verifikasi
-        flutter --version
+        # Set PATH
+        echo "/opt/flutter/bin" >> $GITHUB_PATH
+        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
+        
+        # Pake full path biar pasti
+        /opt/flutter/bin/flutter --version
+        
+        # Flutter doctor buat cek
+        /opt/flutter/bin/flutter doctor
 
     - name: 🔧 Fix pubspec.yaml
       run: |
@@ -61,13 +66,18 @@ jobs:
         unzip -o project.zip -d .
 
     - name: 🧹 Flutter Clean
-      run: flutter clean
+      run: |
+        export PATH="/opt/flutter/bin:$PATH"
+        flutter clean
 
     - name: 📦 Flutter Pub Get
-      run: flutter pub get
+      run: |
+        export PATH="/opt/flutter/bin:$PATH"
+        flutter pub get
 
     - name: 🏗️ Build APK
       run: |
+        export PATH="/opt/flutter/bin:$PATH"
         if [ "${{ github.event.inputs.build_type }}" == "debug" ]; then
           flutter build apk --debug
         else
