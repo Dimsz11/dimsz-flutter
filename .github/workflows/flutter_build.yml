@@ -19,8 +19,6 @@ on:
           - release
           - debug
         default: 'release'
-  push:
-    branches: [ main, master ]
 
 jobs:
   build:
@@ -37,26 +35,30 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: 🐦 Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: 'latest'
-        channel: 'stable'
+    # ===== PAKE CARA MANUAL (PASTI WORK) =====
+    - name: 🐦 Setup Flutter (Manual)
+      run: |
+        # Download Flutter SDK versi stable terbaru
+        wget https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
+        tar -xf flutter_linux_3.24.5-stable.tar.xz
+        echo "$PWD/flutter/bin" >> $GITHUB_PATH
+        echo "FLUTTER_ROOT=$PWD/flutter" >> $GITHUB_ENV
+        
+        # Verifikasi
+        flutter --version
 
-    - name: 🔧 Fix pubspec.yaml (Universal SDK)
+    - name: 🔧 Fix pubspec.yaml
       run: |
         if [ -f pubspec.yaml ]; then
           sed -i 's/sdk: .*/sdk: ">=2.19.0 <4.0.0"/g' pubspec.yaml
           echo "✅ pubspec.yaml fixed"
         fi
 
-    # ===== KALO ADA ZIP_URL, DOWNLOAD & EKSTRAK =====
-    - name: 📥 Download ZIP from URL
+    - name: 📥 Download ZIP (jika ada)
       if: github.event.inputs.zip_url != ''
       run: |
         curl -L "${{ github.event.inputs.zip_url }}" -o project.zip
         unzip -o project.zip -d .
-        echo "✅ ZIP downloaded and extracted"
 
     - name: 🧹 Flutter Clean
       run: flutter clean
@@ -72,7 +74,7 @@ jobs:
           flutter build apk --release --split-per-abi
         fi
 
-    - name: 📤 Upload APK Artifacts
+    - name: 📤 Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: apk-builds
